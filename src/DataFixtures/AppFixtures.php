@@ -9,8 +9,11 @@ use App\Entity\Deacon;
 use App\Entity\Event;
 use App\Entity\EventRegistration;
 use App\Entity\FinancialCategory;
+use App\Entity\InventoryItem;
+use App\Entity\InventoryMovement;
 use App\Entity\Member;
 use App\Entity\Ministry;
+use App\Entity\Notification;
 use App\Entity\PastoralAppointment;
 use App\Entity\PrayerRequest;
 use App\Entity\Schedule;
@@ -42,24 +45,24 @@ class AppFixtures extends Fixture
         $church = (new Church())
             ->setName('Igreja Betel — Sede')
             ->setSlug('betel-sede')
-            ->setEmail('contato@betel.org')
+            ->setEmail('contato@moriadedeus.org')
             ->setPhone('(31) 90000-0000');
         $em->persist($church);
 
         // ---- Usuários (um por perfil) ----
         $perfis = [
-            ['admin@betel.org', 'Administrador Geral', ['ROLE_ADMIN']],
-            ['pastor@betel.org', 'Pr. João Silva', ['ROLE_PASTOR']],
-            ['secretaria@betel.org', 'Ana Secretária', ['ROLE_SECRETARIO']],
-            ['tesouraria@betel.org', 'Carlos Tesoureiro', ['ROLE_TESOUREIRO']],
-            ['diacono@betel.org', 'Diác. Pedro', ['ROLE_DIACONO']],
+            ['admin@moriadedeus.org', 'Administrador Geral', ['ROLE_ADMIN']],
+            ['prvalmer@moriadedeus.org', 'Pr. Valmer Moreira', ['ROLE_PASTOR']],
+            ['secretaria@moriadedeus.org', 'Ana Secretária', ['ROLE_SECRETARIO']],
+            ['tesouraria@moriadedeus.org', 'Carlos Tesoureiro', ['ROLE_TESOUREIRO']],
+            ['diacono@moriadedeus.org', 'Diác. Pedro', ['ROLE_DIACONO']],
         ];
         $deaconUser = null;
         foreach ($perfis as [$mail, $nome, $roles]) {
             $u = (new User())->setEmail($mail)->setFullName($nome)->setRoles($roles)->setChurch($church);
             $u->setPassword($this->hasher->hashPassword($u, 'senha123'));
             $em->persist($u);
-            if ($mail === 'diacono@betel.org') {
+            if ($mail === 'diacono@moriadedeus.org') {
                 $deaconUser = $u; // será vinculado a um cadastro de diácono mais abaixo
             }
         }
@@ -100,7 +103,7 @@ class AppFixtures extends Fixture
             }
         }
 
-        // Vincula o usuário de login "diacono@betel.org" ao 1º diácono (Pedro Alves),
+        // Vincula o usuário de login "diacono@moriadedeus.org" ao 1º diácono (Pedro Alves),
         // um diácono comum: ele poderá aceitar e se desmarcar de vagas (auto-inscrição).
         if ($deaconUser !== null) {
             $deaconUser->setMember($deacons[0]->getMember());
@@ -209,6 +212,38 @@ class AppFixtures extends Fixture
             ->setSentAt(new \DateTimeImmutable())
             ->setChurch($church);
         $em->persist($av);
+
+        // ---- Estoque de doações (mantimentos e limpeza, sem valores) ----
+        $itens = [
+            ['Arroz 5kg', 'mantimento', 'pacote', 20, 10],
+            ['Feijão 1kg', 'mantimento', 'kg', 5, 8],       // abaixo do mínimo → alerta
+            ['Óleo de soja', 'mantimento', 'un', 15, 6],
+            ['Detergente', 'limpeza', 'un', 12, 6],
+            ['Sabão em pó', 'limpeza', 'pacote', 3, 5],      // abaixo do mínimo → alerta
+            ['Papel higiênico', 'higiene', 'fardo', 8, 4],
+        ];
+        foreach ($itens as [$nome, $cat, $un, $qtd, $min]) {
+            $it = (new InventoryItem())
+                ->setName($nome)->setCategory($cat)->setUnit($un)
+                ->setQuantity($qtd)->setMinQuantity($min)
+                ->setChurch($church);
+            $em->persist($it);
+
+            $mov = (new InventoryMovement())
+                ->setItem($it)->setDirection(InventoryMovement::IN)->setQuantity($qtd)
+                ->setDonor('Doação da congregação')->setChurch($church);
+            $em->persist($mov);
+        }
+
+        // ---- Notificação de boas-vindas para o diácono de login ----
+        if ($deaconUser !== null) {
+            $em->persist((new Notification())
+                ->setUser($deaconUser)
+                ->setTitle('Bem-vindo à Diaconia')
+                ->setMessage('Você tem uma vaga de água aceita. Confira em "Minhas escalas".')
+                ->setIcon('hand-thumbs-up')
+                ->setChurch($church));
+        }
 
         $em->flush();
     }

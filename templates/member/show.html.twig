@@ -16,7 +16,7 @@
     <dl class="row mb-0">
       <dt class="col-sm-3">Situação</dt><dd class="col-sm-9"><span class="badge bg-{{ member.status=='ativo'?'success':'secondary' }}">{{ member.status }}</span></dd>
       <dt class="col-sm-3">Função</dt><dd class="col-sm-9 text-capitalize">{{ member.churchRole }}</dd>
-      <dt class="col-sm-3">Ministério</dt><dd class="col-sm-9">{{ member.ministry ?? '—' }}</dd>
+      <dt class="col-sm-3">Ministério</dt><dd class="col-sm-9">{{ member.ministries is not empty ? member.ministries|join(', ') : '—' }}</dd>
       <dt class="col-sm-3">Estado civil</dt><dd class="col-sm-9 text-capitalize">{{ member.maritalStatus ?? '—' }}</dd>
       <dt class="col-sm-3">Nascimento</dt><dd class="col-sm-9">{{ member.birthDate ? member.birthDate|date('d/m/Y') ~ ' (' ~ member.age ~ ' anos)' : '—' }}</dd>
       <dt class="col-sm-3">Batismo</dt><dd class="col-sm-9">{{ member.baptismDate ? member.baptismDate|date('d/m/Y') : '—' }}</dd>

@@ -1,8 +1,8 @@
 {% extends 'layout/base.html.twig' %}
 {% block title %}Membros{% endblock %}
 {% block body %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0"><i class="bi bi-people text-primary"></i> Membros</h4>
+<div class="page-head">
+  <h4 class="page-title"><span class="ico"><i class="bi bi-people"></i></span> Membros</h4>
   <a href="{{ path('member_new') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Novo membro</a>
 </div>
 
@@ -28,7 +28,7 @@
       <tr>
         <td><a href="{{ path('member_show', {id:m.id}) }}" class="text-decoration-none fw-medium">{{ m.fullName }}</a></td>
         <td class="text-capitalize">{{ m.churchRole }}</td>
-        <td>{{ m.ministry ?? '—' }}</td>
+        <td>{{ m.ministries is not empty ? m.ministries|join(', ') : '—' }}</td>
         <td>{{ m.phone ?? '—' }}</td>
         <td><span class="badge bg-{{ m.status=='ativo'?'success':(m.status=='inativo'?'secondary':'warning') }}">{{ m.status }}</span></td>
         <td class="text-end"><a href="{{ path('member_edit', {id:m.id}) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a></td>

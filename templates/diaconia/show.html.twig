@@ -4,6 +4,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div><h4 class="mb-0">{{ schedule.title }}</h4>
     <small class="text-muted">{{ schedule.typeLabel }} · {{ schedule.scheduledAt|date('d/m/Y H:i') }}{% if schedule.location %} · {{ schedule.location }}{% endif %}</small></div>
+  {% if schedule.type == 'santa_ceia' and is_granted('ROLE_PASTOR') %}
+    <a href="{{ path('communion_show', {scheduleId:schedule.id}) }}" class="btn btn-warning btn-sm"><i class="bi bi-cup-hot"></i> Mesa da Ceia</a>
+  {% endif %}
   <a href="{{ path('diaconia_index') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
 </div>
 

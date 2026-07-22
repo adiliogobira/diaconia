@@ -1,57 +1,87 @@
 {% extends 'layout/base.html.twig' %}
 {% block title %}Vagas para servir{% endblock %}
 {% block body %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0"><i class="bi bi-hand-index-thumb text-success"></i> Vagas para servir</h4>
-  <a href="{{ path('diaconia_my') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-person-check"></i> Minhas escalas</a>
+<div class="page-head">
+  <h4 class="page-title"><span class="ico"><i class="bi bi-hand-index-thumb"></i></span> Vagas para servir</h4>
+  <a href="{{ path('diaconia_my') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-person-check"></i> Minhas escalas</a>
 </div>
 
 {% if not me %}
   <div class="alert alert-warning">Seu usuário não está vinculado a um cadastro de diácono, então você pode visualizar mas não se escalar. Fale com a secretaria/líder.</div>
 {% endif %}
 
-{% for group in grouped %}
-  {% set s = group.schedule %}
+{% for s in schedules %}
+  {% set jaSirvo = false %}
+  {% for slot in s.slots %}
+    {% if me and slot.deacon and slot.deacon.id == me.id %}{% set jaSirvo = true %}{% endif %}
+  {% endfor %}
+
   <div class="card mb-3">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <div>
         <span class="badge bg-primary-subtle text-primary">{{ s.typeLabel }}</span>
         <strong class="ms-1">{{ s.title }}</strong>
         <small class="text-muted ms-2"><i class="bi bi-calendar-event"></i> {{ s.scheduledAt|date('d/m/Y H:i') }}</small>
+        {% if s.location %}<small class="text-muted ms-2"><i class="bi bi-geo-alt"></i> {{ s.location }}</small>{% endif %}
       </div>
-      {% if s.location %}<small class="text-muted"><i class="bi bi-geo-alt"></i> {{ s.location }}</small>{% endif %}
+      {% if jaSirvo %}<span class="badge bg-success"><i class="bi bi-check-circle"></i> Você está escalado</span>{% endif %}
     </div>
-    <ul class="list-group list-group-flush">
-      {% for slot in group.slots %}
-        <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div>
-            <i class="bi bi-clipboard-check text-primary"></i>
-            <strong>{{ slot.activityLabel }}</strong>
-            {% if slot.notes %}<small class="text-muted">— {{ slot.notes }}</small>{% endif %}
-          </div>
-          <div>
-            {% if slot.isFilled %}
-              {% if me and slot.deacon and slot.deacon.id == me.id %}
-                <span class="badge bg-success">Você aceitou</span>
+
+    {# ---- Vagas já criadas pelo líder ---- #}
+    {% if s.slots|length %}
+      <ul class="list-group list-group-flush">
+        {% for slot in s.slots %}
+          <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <i class="bi bi-clipboard-check text-primary"></i>
+              <strong>{{ slot.activityLabel }}</strong>
+              {% if slot.notes %}<small class="text-muted">— {{ slot.notes }}</small>{% endif %}
+            </div>
+            <div>
+              {% if slot.isFilled %}
+                {% if me and slot.deacon and slot.deacon.id == me.id %}
+                  <span class="badge bg-success">Você aceitou</span>
+                {% else %}
+                  <span class="badge bg-secondary"><i class="bi bi-person-fill"></i> {{ slot.deacon ? slot.deacon.name : '—' }}</span>
+                {% endif %}
               {% else %}
-                <span class="badge bg-secondary"><i class="bi bi-person-fill"></i> {{ slot.deacon ? slot.deacon.name : '—' }}</span>
+                {% if me %}
+                  <form method="post" action="{{ path('diaconia_slot_accept', {id:slot.id}) }}" class="d-inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('slot_accept' ~ slot.id) }}">
+                    <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Assumir vaga</button>
+                  </form>
+                {% else %}
+                  <span class="badge bg-warning-subtle text-warning-emphasis">Vaga aberta</span>
+                {% endif %}
               {% endif %}
-            {% else %}
-              {% if me %}
-                <form method="post" action="{{ path('diaconia_slot_accept', {id:slot.id}) }}" class="d-inline">
-                  <input type="hidden" name="_token" value="{{ csrf_token('slot_accept' ~ slot.id) }}">
-                  <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Aceitar</button>
-                </form>
-              {% else %}
-                <span class="badge bg-warning-subtle text-warning-emphasis">Vaga aberta</span>
-              {% endif %}
-            {% endif %}
-          </div>
-        </li>
-      {% endfor %}
-    </ul>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {# ---- Prontificar-se livremente (escolhendo a atividade) ---- #}
+    {% if me %}
+    <div class="card-footer bg-transparent border-top">
+      <form method="post" action="{{ path('diaconia_volunteer', {id:s.id}) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="_token" value="{{ csrf_token('volunteer' ~ s.id) }}">
+        <div class="col-12 col-sm">
+          <label class="form-label mb-1"><i class="bi bi-plus-circle text-success"></i> Prontificar-me para servir nesta escala</label>
+          <select name="activity" class="form-select form-select-sm">
+            {% for key, label in activities %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-8 col-sm-4">
+          <input name="notes" class="form-control form-control-sm" placeholder="Detalhe (opcional)">
+        </div>
+        <div class="col-4 col-sm-auto">
+          <button class="btn btn-success btn-sm w-100"><i class="bi bi-hand-thumbs-up"></i> Servir</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
   </div>
 {% else %}
-  <div class="card p-4 text-center text-muted">Nenhuma vaga aberta em escalas futuras no momento.</div>
+  <div class="card p-4 text-center text-muted">Nenhuma escala futura no momento.</div>
 {% endfor %}
 {% endblock %}

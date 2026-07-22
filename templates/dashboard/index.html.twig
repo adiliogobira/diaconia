@@ -1,41 +1,63 @@
 {% extends 'layout/base.html.twig' %}
 {% block title %}Painel — {{ app_name }}{% endblock %}
 {% block body %}
-<h4 class="mb-4"><i class="bi bi-speedometer2 text-primary"></i> Painel Executivo</h4>
+<div class="page-head">
+  <h4 class="page-title"><span class="ico"><i class="bi bi-speedometer2"></i></span> Painel Executivo</h4>
+  <div class="text-muted small d-none d-sm-block">
+    <i class="bi bi-person-circle"></i> Olá, {{ app.user.fullName|split(' ')|first }} · {{ "now"|date('d/m/Y') }}
+  </div>
+</div>
+
+{% set canMoney = is_granted('MODULE_TREASURY') %}
 
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Membros ativos</small><div class="display-6 text-success">{{ membersActive }}</div></div></div>
   <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Membros inativos</small><div class="display-6 text-secondary">{{ membersInactive }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Saldo do mês</small><div class="display-6 {{ balance >= 0 ? 'text-primary' : 'text-danger' }}">R$ {{ balance|number_format(0,',','.') }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Dízimos no mês</small><div class="display-6 text-info">R$ {{ tithes|number_format(0,',','.') }}</div></div></div>
+  {% if canMoney %}
+    <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Saldo do mês</small><div class="display-6 {{ balance >= 0 ? 'text-primary' : 'text-danger' }}">R$ {{ balance|number_format(0,',','.') }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Dízimos no mês</small><div class="display-6 text-info">R$ {{ tithes|number_format(0,',','.') }}</div></div></div>
+  {% else %}
+    <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Escalas futuras</small><div class="display-6 text-primary">{{ upcomingSchedules|length }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card stat-card p-3"><small class="text-muted">Aniversariantes</small><div class="display-6 text-info">{{ birthdays|length }}</div></div></div>
+  {% endif %}
 </div>
 
 <div class="row g-3">
+  {% if canMoney %}
   <div class="col-lg-8">
     <div class="card p-3">
       <h6 class="mb-3">Fluxo de caixa {{ "now"|date("Y") }}</h6>
       <canvas id="cashChart" height="110"></canvas>
     </div>
   </div>
-  <div class="col-lg-4">
-    <div class="card p-3 mb-3">
-      <h6 class="mb-3"><i class="bi bi-calendar-check text-primary"></i> Próximas escalas</h6>
-      {% for s in upcomingSchedules %}
-        <div class="d-flex justify-content-between border-bottom py-2 small">
-          <span>{{ s.title }}<br><span class="text-muted">{{ s.typeLabel }}</span></span>
-          <span class="text-muted">{{ s.scheduledAt|date('d/m H:i') }}</span>
+  {% endif %}
+
+  <div class="{{ canMoney ? 'col-lg-4' : 'col-lg-12' }}">
+    <div class="row g-3">
+      <div class="{{ canMoney ? 'col-12' : 'col-md-6' }}">
+        <div class="card p-3 h-100">
+          <h6 class="mb-3"><i class="bi bi-calendar-check text-primary"></i> Próximas escalas</h6>
+          {% for s in upcomingSchedules %}
+            <div class="d-flex justify-content-between border-bottom py-2 small">
+              <span>{{ s.title }}<br><span class="text-muted">{{ s.typeLabel }}</span></span>
+              <span class="text-muted">{{ s.scheduledAt|date('d/m H:i') }}</span>
+            </div>
+          {% else %}<p class="text-muted small mb-0">Nenhuma escala futura.</p>{% endfor %}
         </div>
-      {% else %}<p class="text-muted small mb-0">Nenhuma escala futura.</p>{% endfor %}
-    </div>
-    <div class="card p-3">
-      <h6 class="mb-3"><i class="bi bi-cake2 text-primary"></i> Aniversariantes do mês</h6>
-      {% for m in birthdays %}
-        <div class="d-flex justify-content-between small py-1"><span>{{ m.fullName }}</span><span class="text-muted">{{ m.birthDate|date('d/m') }}</span></div>
-      {% else %}<p class="text-muted small mb-0">Nenhum este mês.</p>{% endfor %}
+      </div>
+      <div class="{{ canMoney ? 'col-12' : 'col-md-6' }}">
+        <div class="card p-3 h-100">
+          <h6 class="mb-3"><i class="bi bi-cake2 text-primary"></i> Aniversariantes do mês</h6>
+          {% for m in birthdays %}
+            <div class="d-flex justify-content-between small py-1"><span>{{ m.fullName }}</span><span class="text-muted">{{ m.birthDate|date('d/m') }}</span></div>
+          {% else %}<p class="text-muted small mb-0">Nenhum este mês.</p>{% endfor %}
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
+{% if canMoney %}
 <script>
 const cf = {{ cashFlow|json_encode|raw }};
 const labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -48,4 +70,5 @@ new Chart(document.getElementById('cashChart'), {
   options:{ responsive:true, plugins:{legend:{position:'bottom'}} }
 });
 </script>
+{% endif %}
 {% endblock %}

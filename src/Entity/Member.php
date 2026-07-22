@@ -5,6 +5,8 @@ namespace App\Entity;
 use App\Repository\MemberRepository;
 use App\Tenant\TenantAwareInterface;
 use App\Tenant\TenantAwareTrait;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -73,8 +75,13 @@ class Member implements TenantAwareInterface
     #[ORM\Column(length: 40, options: ['default' => 'membro'])]
     private string $churchRole = 'membro';
 
-    #[ORM\ManyToOne(targetEntity: Ministry::class)]
-    private ?Ministry $ministry = null;
+    /**
+     * Ministérios em que o membro participa (pode ser mais de um).
+     * @var Collection<int, Ministry>
+     */
+    #[ORM\ManyToMany(targetEntity: Ministry::class, inversedBy: 'members')]
+    #[ORM\JoinTable(name: 'member_ministry')]
+    private Collection $ministries;
 
     #[ORM\Column(length: 20, options: ['default' => self::STATUS_ATIVO])]
     private string $status = self::STATUS_ATIVO;
@@ -95,6 +102,7 @@ class Member implements TenantAwareInterface
 
     public function __construct()
     {
+        $this->ministries = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -125,8 +133,28 @@ class Member implements TenantAwareInterface
     public function setEntryType(?string $v): static { $this->entryType = $v; return $this; }
     public function getChurchRole(): string { return $this->churchRole; }
     public function setChurchRole(string $v): static { $this->churchRole = $v; return $this; }
-    public function getMinistry(): ?Ministry { return $this->ministry; }
-    public function setMinistry(?Ministry $v): static { $this->ministry = $v; return $this; }
+    /** @return Collection<int, Ministry> */
+    public function getMinistries(): Collection { return $this->ministries; }
+
+    public function addMinistry(Ministry $m): static
+    {
+        if (!$this->ministries->contains($m)) {
+            $this->ministries->add($m);
+        }
+        return $this;
+    }
+
+    public function removeMinistry(Ministry $m): static
+    {
+        $this->ministries->removeElement($m);
+        return $this;
+    }
+
+    /** Atalho de compatibilidade: retorna o primeiro ministério (ou null). */
+    public function getMinistry(): ?Ministry
+    {
+        return $this->ministries->first() ?: null;
+    }
     public function getStatus(): string { return $this->status; }
     public function setStatus(string $v): static { $this->status = $v; return $this; }
     public function getPhotoPath(): ?string { return $this->photoPath; }

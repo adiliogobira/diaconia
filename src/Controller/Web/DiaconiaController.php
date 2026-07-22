@@ -13,6 +13,7 @@ use App\Repository\DeaconRepository;
 use App\Repository\ScheduleAssignmentRepository;
 use App\Repository\ScheduleRepository;
 use App\Repository\ServiceSlotRepository;
+use App\Service\Notifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -48,7 +49,7 @@ class DiaconiaController extends AbstractController
     }
 
     #[Route('/escala/nova', name: 'diaconia_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, ScheduleRepository $repo, DeaconRepository $deacons): Response
+    public function new(Request $request, ScheduleRepository $repo, DeaconRepository $deacons, Notifier $notifier): Response
     {
         $this->denyUnlessManager($deacons);
 
@@ -58,7 +59,22 @@ class DiaconiaController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $repo->save($schedule);
-            $this->addFlash('success', 'Escala criada. Agora monte as vagas de serviço.');
+
+            // Notifica todos os diáconos comuns (sem liderança) sobre a nova escala.
+            foreach ($deacons->findBy(['active' => true]) as $d) {
+                if (!$d->isLeader()) {
+                    $notifier->notifyMember(
+                        $d->getMember(),
+                        'Nova escala publicada',
+                        'Uma nova escala foi criada: "'.$schedule->getTitle().'" em '
+                            .$schedule->getScheduledAt()->format('d/m/Y H:i').'. Acesse Diaconia para se escalar.',
+                        $this->generateUrl('diaconia_open'),
+                        'calendar-check'
+                    );
+                }
+            }
+
+            $this->addFlash('success', 'Escala criada e diáconos notificados.');
 
             return $this->redirectToRoute('diaconia_show', ['id' => $schedule->getId()]);
         }
@@ -93,20 +109,18 @@ class DiaconiaController extends AbstractController
 
     /** Vagas de serviço abertas em escalas futuras — o diácono vê e aceita. */
     #[Route('/vagas', name: 'diaconia_open', methods: ['GET'])]
-    public function open(ServiceSlotRepository $slots, DeaconRepository $deacons): Response
+    public function open(ScheduleRepository $scheduleRepo, DeaconRepository $deacons): Response
     {
         $me = $this->currentDeacon($deacons);
 
-        $grouped = [];
-        foreach ($slots->upcoming() as $slot) {
-            $sid = $slot->getSchedule()->getId();
-            $grouped[$sid]['schedule'] = $slot->getSchedule();
-            $grouped[$sid]['slots'][] = $slot;
-        }
+        // Todas as escalas futuras (mesmo as que ainda não têm vaga criada),
+        // para o diácono poder se prontificar livremente.
+        $schedules = $scheduleRepo->upcoming();
 
         return $this->render('diaconia/open.html.twig', [
-            'grouped' => $grouped,
+            'schedules' => $schedules,
             'me' => $me,
+            'activities' => ServiceSlot::ACTIVITIES,
         ]);
     }
 
@@ -121,6 +135,58 @@ class DiaconiaController extends AbstractController
             'slots' => $mine,
             'me' => $me,
         ]);
+    }
+
+    /**
+     * Auto-inscrição LIVRE: qualquer diácono pode se prontificar para servir
+     * numa escala futura, escolhendo a atividade — mesmo sem uma vaga pré-criada
+     * pelo líder. Cria uma vaga já preenchida por ele.
+     */
+    #[Route('/escala/{id}/prontificar', name: 'diaconia_volunteer', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function volunteer(Request $request, Schedule $schedule, DeaconRepository $deacons, EntityManagerInterface $em, Notifier $notifier): Response
+    {
+        $me = $this->currentDeacon($deacons);
+
+        if (!$me) {
+            $this->addFlash('danger', 'Seu usuário não está vinculado a um cadastro de diácono.');
+
+            return $this->redirectToRoute('diaconia_open');
+        }
+
+        if (!$this->isCsrfTokenValid('volunteer'.$schedule->getId(), $request->request->get('_token'))) {
+            return $this->redirectToRoute('diaconia_open');
+        }
+
+        $activity = $request->request->get('activity', 'outro');
+        if (!array_key_exists($activity, ServiceSlot::ACTIVITIES)) {
+            $activity = 'outro';
+        }
+        $notes = trim((string) $request->request->get('notes')) ?: null;
+
+        $slot = new ServiceSlot();
+        $slot->setSchedule($schedule)
+             ->setActivity($activity)
+             ->setNotes($notes)
+             ->setChurch($this->getUser()->getChurch());
+        $slot->assignTo($me);
+        $schedule->addSlot($slot);
+
+        $em->persist($slot);
+        $em->flush();
+
+        // Avisa líderes/pastores que alguém se prontificou espontaneamente.
+        $notifier->notifyChurchRoles(
+            $this->getUser()->getChurch(),
+            ['ROLE_PASTOR', 'ROLE_ADMIN'],
+            'Diácono se prontificou',
+            $me->getName().' se prontificou para "'.$slot->getActivityLabel().'" em '.$schedule->getTitle().'.',
+            $this->generateUrl('diaconia_show', ['id' => $schedule->getId()]),
+            'hand-thumbs-up'
+        );
+
+        $this->addFlash('success', 'Você se prontificou para servir em "'.$slot->getActivityLabel().'". Obrigado!');
+
+        return $this->redirectToRoute('diaconia_my');
     }
 
     /** Líder/pastor monta uma vaga de serviço na escala. */
@@ -160,7 +226,7 @@ class DiaconiaController extends AbstractController
 
     /** Diácono ACEITA uma vaga aberta (auto-inscrição). */
     #[Route('/vaga/{id}/aceitar', name: 'diaconia_slot_accept', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function slotAccept(Request $request, ServiceSlot $slot, DeaconRepository $deacons, EntityManagerInterface $em): Response
+    public function slotAccept(Request $request, ServiceSlot $slot, DeaconRepository $deacons, EntityManagerInterface $em, Notifier $notifier): Response
     {
         $me = $this->currentDeacon($deacons);
 
@@ -179,6 +245,16 @@ class DiaconiaController extends AbstractController
         } else {
             $slot->assignTo($me);
             $em->flush();
+
+            $notifier->notifyChurchRoles(
+                $this->getUser()->getChurch(),
+                ['ROLE_PASTOR', 'ROLE_ADMIN'],
+                'Vaga preenchida',
+                $me->getName().' aceitou a vaga "'.$slot->getActivityLabel().'" em '.$slot->getSchedule()->getTitle().'.',
+                $this->generateUrl('diaconia_show', ['id' => $slot->getSchedule()->getId()]),
+                'hand-thumbs-up'
+            );
+
             $this->addFlash('success', 'Você se escalou para: '.$slot->getActivityLabel().'.');
         }
 
@@ -187,7 +263,7 @@ class DiaconiaController extends AbstractController
 
     /** Diácono SE DESMARCA de uma vaga que aceitou, informando o motivo. */
     #[Route('/vaga/{id}/desmarcar', name: 'diaconia_slot_withdraw', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function slotWithdraw(Request $request, ServiceSlot $slot, DeaconRepository $deacons, EntityManagerInterface $em): Response
+    public function slotWithdraw(Request $request, ServiceSlot $slot, DeaconRepository $deacons, EntityManagerInterface $em, Notifier $notifier): Response
     {
         $me = $this->currentDeacon($deacons);
 
@@ -222,6 +298,16 @@ class DiaconiaController extends AbstractController
         $em->persist($log);
         $em->flush();
 
+        $notifier->notifyChurchRoles(
+            $this->getUser()->getChurch(),
+            ['ROLE_PASTOR', 'ROLE_ADMIN'],
+            'Saída de escala',
+            ($leaving ? $leaving->getName() : 'Um diácono').' saiu da vaga "'.$slot->getActivityLabel()
+                .'" em '.$slot->getSchedule()->getTitle().'. Motivo: '.$reason,
+            $this->generateUrl('diaconia_show', ['id' => $slot->getSchedule()->getId()]),
+            'exclamation-triangle'
+        );
+
         $this->addFlash('success', 'Você saiu da escala. O líder foi notificado com o motivo.');
 
         return $this->redirectToRoute('diaconia_my');
@@ -233,7 +319,7 @@ class DiaconiaController extends AbstractController
 
     /** Designa um diácono à escala (fluxo de cima pra baixo). */
     #[Route('/escala/{id}/designar', name: 'diaconia_assign', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function assign(Request $request, Schedule $schedule, DeaconRepository $deacons, EntityManagerInterface $em): Response
+    public function assign(Request $request, Schedule $schedule, DeaconRepository $deacons, EntityManagerInterface $em, Notifier $notifier): Response
     {
         $this->denyUnlessManager($deacons);
 
@@ -249,7 +335,17 @@ class DiaconiaController extends AbstractController
             $schedule->addAssignment($a);
             $em->persist($a);
             $em->flush();
-            $this->addFlash('success', 'Diácono escalado.');
+
+            // Notifica o diácono escalado (se tiver usuário vinculado).
+            $notifier->notifyMember(
+                $deacon->getMember(),
+                'Você foi escalado',
+                'Você foi escalado para "'.$schedule->getTitle().'" em '.$schedule->getScheduledAt()->format('d/m/Y H:i').'.',
+                $this->generateUrl('diaconia_show', ['id' => $schedule->getId()]),
+                'calendar-check'
+            );
+
+            $this->addFlash('success', 'Diácono escalado e notificado.');
         }
 
         return $this->redirectToRoute('diaconia_show', ['id' => $schedule->getId()]);

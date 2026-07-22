@@ -1,8 +1,8 @@
 {% extends 'layout/base.html.twig' %}
 {% block title %}Eventos{% endblock %}
 {% block body %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0"><i class="bi bi-calendar-event text-primary"></i> Eventos</h4>
+<div class="page-head">
+  <h4 class="page-title"><span class="ico"><i class="bi bi-calendar-event"></i></span> Eventos</h4>
   <a href="{{ path('event_new') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Novo evento</a>
 </div>
 

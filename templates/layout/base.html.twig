@@ -17,6 +17,9 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="{{ asset('assets/css/app.css') }}" rel="stylesheet">
     {% block stylesheets %}{% endblock %}
 </head>
@@ -42,15 +45,58 @@
 
     {# ============ CONTEÚDO ============ #}
     <main class="content">
-        {# Top app bar (mobile) #}
-        <header class="appbar d-lg-none">
-            <div class="d-flex align-items-center gap-2 text-truncate">
+        {# Barra do topo (todas as telas): marca no mobile + sino de notificações #}
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-2 text-truncate d-lg-none">
                 <i class="bi bi-buildings"></i>
                 <strong class="text-truncate">{{ app.user.church }}</strong>
             </div>
-            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#menu">
-                <i class="bi bi-list"></i>
-            </button>
+            <div class="topbar-spacer d-none d-lg-block"></div>
+
+            <div class="d-flex align-items-center gap-2">
+                {# ---- Sino de notificações ---- #}
+                {% set unread = app_notifications_unread() %}
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-light position-relative" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        <i class="bi bi-bell"></i>
+                        {% if unread > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                {{ unread > 9 ? '9+' : unread }}
+                            </span>
+                        {% endif %}
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end notif-menu shadow">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                            <strong>Notificações</strong>
+                            {% if unread > 0 %}
+                                <form method="post" action="{{ path('notification_read_all') }}" class="m-0">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('read_all') }}">
+                                    <button class="btn btn-link btn-sm p-0 text-decoration-none">Marcar lidas</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        <div class="notif-list">
+                            {% for n in app_notifications_recent() %}
+                                <a href="{{ path('notification_open', {id:n.id}) }}" class="dropdown-item d-flex gap-2 py-2 {{ n.read ? '' : 'fw-semibold bg-primary-subtle' }}">
+                                    <i class="bi bi-{{ n.icon }} text-primary"></i>
+                                    <span class="flex-grow-1 text-wrap">
+                                        {{ n.title }}
+                                        <small class="d-block text-muted fw-normal">{{ n.createdAt|date('d/m H:i') }}</small>
+                                    </span>
+                                </a>
+                            {% else %}
+                                <div class="dropdown-item text-muted small">Nenhuma notificação.</div>
+                            {% endfor %}
+                        </div>
+                        <a href="{{ path('notification_index') }}" class="dropdown-item text-center border-top small text-primary">Ver todas</a>
+                    </div>
+                </div>
+
+                {# ---- Menu (mobile) ---- #}
+                <button class="btn btn-sm btn-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#menu">
+                    <i class="bi bi-list"></i>
+                </button>
+            </div>
         </header>
 
         <div class="app-content container-fluid">
