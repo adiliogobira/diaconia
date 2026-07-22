@@ -1,0 +1,48 @@
+{% extends 'layout/base.html.twig' %}
+{% block title %}Diaconia{% endblock %}
+{% block body %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h4 class="mb-0"><i class="bi bi-hand-thumbs-up text-primary"></i> Diaconia — Escalas</h4>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{{ path('diaconia_open') }}" class="btn btn-success"><i class="bi bi-hand-index-thumb"></i> Vagas para servir</a>
+    <a href="{{ path('diaconia_my') }}" class="btn btn-outline-success"><i class="bi bi-person-check"></i> Minhas escalas</a>
+    {% if canManage %}
+      <a href="{{ path('diaconia_new') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nova escala</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="mb-3">
+  <a href="{{ path('diaconia_index') }}" class="btn btn-sm {{ type is null ? 'btn-primary' : 'btn-outline-primary' }}">Todas</a>
+  {% for key, label in types %}
+    <a href="{{ path('diaconia_index', {type:key}) }}" class="btn btn-sm {{ type==key ? 'btn-primary' : 'btn-outline-primary' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+{% for s in schedules %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex justify-content-between">
+        <span class="badge bg-primary-subtle text-primary">{{ s.typeLabel }}</span>
+        <small class="text-muted">{{ s.scheduledAt|date('d/m/Y H:i') }}</small>
+      </div>
+      <h6 class="mt-2 mb-1">{{ s.title }}</h6>
+      {% if s.location %}<small class="text-muted"><i class="bi bi-geo-alt"></i> {{ s.location }}</small>{% endif %}
+      <div class="mt-2 small text-muted">
+        <i class="bi bi-people"></i> {{ s.assignments|length }} escalados · {{ s.countPresent }} presentes
+      </div>
+      {% if s.slots|length %}
+        <div class="mt-1 small">
+          <span class="badge bg-success-subtle text-success">{{ s.countFilledSlots }} preenchidas</span>
+          {% if s.countOpenSlots %}<span class="badge bg-warning-subtle text-warning-emphasis">{{ s.countOpenSlots }} vagas abertas</span>{% endif %}
+        </div>
+      {% endif %}
+      <a href="{{ path('diaconia_show', {id:s.id}) }}" class="btn btn-sm btn-outline-primary mt-3">{{ canManage ? 'Gerenciar' : 'Ver detalhes' }}</a>
+    </div>
+  </div>
+{% else %}
+  <div class="col-12"><div class="card p-4 text-center text-muted">Nenhuma escala futura.{% if canManage %} Crie a primeira.{% endif %}</div></div>
+{% endfor %}
+</div>
+{% endblock %}
